@@ -96,7 +96,11 @@ func (a App) Run(args []string) error {
 		l := Lifecycle{Runner: r}
 		switch args[0] {
 		case "up":
-			return l.Up(ctx, c)
+			if err := l.Up(ctx, c); err != nil {
+				return err
+			}
+			PrintStartupGuide(c, a.Out)
+			return nil
 		case "stop":
 			return l.Stop(ctx, c)
 		case "down":

@@ -149,6 +149,76 @@ laradev up
 laradev status
 ```
 
+### First-run checklist
+
+`laradev up` starts the containers, but two application-side settings are
+required before your Laravel app behaves correctly. Think of this as the
+**container handshake**: Vite must listen on the Docker network, and Laravel
+must use Docker's MySQL service name.
+
+#### 1. Configure Vite before `pnpm run dev`
+
+In `vite.config.js`, use this exact server configuration:
+
+```js
+server: {
+    host: '0.0.0.0',
+    strictPort: true,
+    hmr: {
+        host: '127.0.0.1',
+    },
+},
+```
+
+Why every line matters:
+
+- `host: '0.0.0.0'` makes Vite reachable through Docker's published port.
+- `strictPort: true` prevents Vite from silently moving to `5174` when `5173`
+  is occupied. laradev publishes `5173`, not arbitrary fallback ports.
+- `hmr.host: '127.0.0.1'` makes the browser connect to the host-published
+  Vite server for HMR.
+
+Then start the stack and Vite:
+
+```bash
+laradev up
+pnpm run dev
+```
+
+You should see Vite report `http://localhost:5173/`. If it reports
+`5174` or another port, stop the process already using `5173` before
+continuing.
+
+#### 2. Configure Laravel's database connection
+
+These values are for the Laravel app **inside the www container**:
+
+```dotenv
+DB_CONNECTION=mysql
+DB_HOST=mysql
+DB_PORT=3306
+DB_DATABASE=www
+DB_USERNAME=user
+DB_PASSWORD=password
+```
+
+Use the actual `database`, `username`, and `password` values from the
+`mysql` section of `.laradev.yml` if you changed the defaults. The important
+detail is `DB_HOST=mysql`: that is the Docker network alias. Do not use
+`127.0.0.1`, `localhost`, or the phpMyAdmin host port from inside www.
+MySQL port `3306` is intentionally not published to the host.
+
+After changing `.env`, clear Laravel's cached configuration if necessary:
+
+```bash
+laradev exec php artisan config:clear
+laradev exec php artisan migrate
+```
+
+`laradev up` prints this checklist after a successful startup. It shows the
+safe database fields and points `DB_PASSWORD` to your local `.laradev.yml`
+value without echoing the password into terminal history or logs.
+
 `up` creates or starts:
 
 - `laradev-<project-id>-www-<worktree-id>`

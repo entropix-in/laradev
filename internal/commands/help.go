@@ -141,9 +141,24 @@ Resolve the current project/worktree, validate Docker resources, and create or
 start the www, MySQL, phpMyAdmin, and Caddy services required by .laradev.yml.
 The current worktree is mounted at /app. MySQL data is kept in a named volume.
 
+Before pnpm run dev, configure Vite:
+  server: {
+      host: '0.0.0.0',
+      strictPort: true,
+      hmr: { host: '127.0.0.1' },
+  }
+
+Inside www, Laravel's MySQL environment is:
+  DB_CONNECTION=mysql
+  DB_HOST=mysql
+  DB_PORT=3306
+  DB_DATABASE=<mysql.database>
+  DB_USERNAME=<mysql.username>
+  DB_PASSWORD=<mysql.password>
+Use mysql as DB_HOST, not localhost or 127.0.0.1.
+
 Run from the project root or any directory below it.
 `
-
 const stopHelp = `USAGE
   laradev stop
 
