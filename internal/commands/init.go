@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/rohan2388/laradev/internal/config"
+	"github.com/rohan2388/laradev/internal/dns"
 	"github.com/rohan2388/laradev/internal/project"
 	"github.com/rohan2388/laradev/internal/prompt"
 	"github.com/rohan2388/laradev/internal/proxy"
@@ -81,6 +82,9 @@ func BuildConfig(in io.Reader, out, errOut io.Writer) (config.Config, error) {
 		n, er := strconv.Atoi(port)
 		if er != nil || n < 1 || n > 65535 {
 			return c, fmt.Errorf("invalid domain port")
+		}
+		if err := dns.ValidateDomain(strings.ToLower(domain)); err != nil {
+			return c, err
 		}
 		c.Domains = []config.DomainRoute{{Name: strings.ToLower(domain), Port: uint16(n)}}
 	}

@@ -49,6 +49,8 @@ func helpText(args []string) string {
 		return downHelp
 	case "status":
 		return statusHelp
+	case "dns":
+		return dnsHelp
 	case "stop-all":
 		return stopAllHelp
 	case "cleanup":
@@ -85,6 +87,7 @@ PROJECT COMMANDS
   stop                             Stop services without deleting containers or data.
   down                             Remove project containers; preserve MySQL data.
   status                           Show current project services and domains.
+  dns <start|stop|refresh|status>  Manage Docker dnsmasq and systemd-resolved.
   stop-all                         Stop every managed container.
   cleanup                          Remove managed resources whose project paths are gone.
 
@@ -183,6 +186,17 @@ ports, configured domains, and active route information. Outside a project,
 show all managed project containers.
 `
 
+const dnsHelp = `USAGE
+  laradev dns start
+  laradev dns stop
+  laradev dns refresh
+  laradev dns status
+
+Manage the Docker dnsmasq container used for explicit .test domains. The first
+active .test route installs one laradev-owned systemd-resolved drop-in with
+sudo. Later route refreshes do not require sudo. Only configured apex and
+wildcard routes resolve to 127.0.0.1; arbitrary .test names do not.
+`
 const stopAllHelp = `USAGE
   laradev stop-all
 
@@ -290,11 +304,14 @@ const domainHelp = `USAGE
 
 Manage project HTTPS routes through the global Docker Caddy proxy. Domain names
 are normalized to lowercase. The route port is the TCP port inside the www
-container and does not need a host publication. Add requires mkcert.
+container and does not need a host publication. .test domains also receive
+explicit Docker dnsmasq routing; wildcard entries are supported. Add requires
+mkcert.
 
 EXAMPLES
   laradev domain list
   laradev domain add myapp.test
+  laradev domain add '*.myapp.test'
   laradev domain add ws.myapp.test --port 8080
   laradev domain remove ws.myapp.test
 `

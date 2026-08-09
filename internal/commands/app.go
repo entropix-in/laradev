@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/rohan2388/laradev/internal/config"
+	"github.com/rohan2388/laradev/internal/dns"
 	"github.com/rohan2388/laradev/internal/docker"
 	"github.com/rohan2388/laradev/internal/lock"
 	"github.com/rohan2388/laradev/internal/project"
@@ -53,8 +54,8 @@ func (a App) Run(args []string) error {
 	if lockErr != nil {
 		return lockErr
 	}
-	mutating := args[0] == "init" || args[0] == "new" || args[0] == "up" || args[0] == "stop" || args[0] == "down" || args[0] == "install" || args[0] == "stop-all" || args[0] == "cleanup" || args[0] == "command" || args[0] == "domain"
-	if mutating || args[0] == "status" {
+	mutating := args[0] == "init" || args[0] == "new" || args[0] == "up" || args[0] == "stop" || args[0] == "down" || args[0] == "install" || args[0] == "stop-all" || args[0] == "cleanup" || args[0] == "command" || args[0] == "domain" || (args[0] == "dns" && (len(args) < 2 || args[1] != "status"))
+	if mutating || args[0] == "status" || (args[0] == "dns" && len(args) > 1 && args[1] == "status") {
 		exclusive := mutating
 		held, err := lock.Acquire(ctx, filepath.Join(lockPath, "laradev.lock"), exclusive, map[bool]time.Duration{true: 30 * time.Second, false: 5 * time.Second}[exclusive])
 		if err != nil {
@@ -84,6 +85,8 @@ func (a App) Run(args []string) error {
 			}
 		}
 		return NewProject(ctx, args[1], version, r, a.In, a.Out, a.Err)
+	case "dns":
+		return a.dns(args[1:])
 	case "up", "stop", "down", "status":
 		c, err := project.Resolve(cwd)
 		if err != nil {
@@ -93,7 +96,7 @@ func (a App) Run(args []string) error {
 			return err
 		}
 		_ = project.EnsureGitExclude(c.ProjectRoot)
-		l := Lifecycle{Runner: r}
+		l := Lifecycle{Runner: r, Input: a.In}
 		switch args[0] {
 		case "up":
 			if err := l.Up(ctx, c); err != nil {
@@ -109,9 +112,9 @@ func (a App) Run(args []string) error {
 			return l.Status(ctx, &c, a.Out)
 		}
 	case "stop-all":
-		return (Lifecycle{Runner: r}).StopAll(ctx)
+		return (Lifecycle{Runner: r, Input: a.In}).StopAll(ctx)
 	case "cleanup":
-		return (Lifecycle{Runner: r}).Cleanup(ctx)
+		return (Lifecycle{Runner: r, Input: a.In}).Cleanup(ctx)
 	case "exec":
 		if len(args) < 2 {
 			return errors.New("usage: laradev exec <command> [args]")
@@ -128,6 +131,40 @@ func (a App) Run(args []string) error {
 		return a.domain(args[1:], cwd)
 	default:
 		return fmt.Errorf("unknown command %q", args[0])
+	}
+}
+func (a App) dns(args []string) error {
+	if len(args) != 1 {
+		return errors.New("usage: laradev dns start|stop|refresh|status")
+	}
+	manager, err := dns.New(a.runner(), nil, a.In)
+	if err != nil {
+		return err
+	}
+	ctx := context.Background()
+	switch args[0] {
+	case "start":
+		if err := manager.Start(ctx); err != nil {
+			return err
+		}
+		fmt.Fprintln(a.Out, "laradev DNS started or already up")
+		return nil
+	case "stop":
+		if err := manager.Stop(ctx); err != nil {
+			return err
+		}
+		fmt.Fprintln(a.Out, "laradev DNS stopped or already stopped")
+		return nil
+	case "refresh":
+		if err := manager.Refresh(ctx); err != nil {
+			return err
+		}
+		fmt.Fprintln(a.Out, "laradev DNS refreshed")
+		return nil
+	case "status":
+		return manager.Status(ctx, a.Out)
+	default:
+		return fmt.Errorf("unknown dns subcommand %q", args[0])
 	}
 }
 func (a App) install(args []string, cwd string) error {
@@ -244,6 +281,9 @@ func (a App) domain(args []string, cwd string) error {
 				i++
 			}
 		}
+		if e := dns.ValidateDomain(name); e != nil {
+			return e
+		}
 		p, e := proxy.New(a.runner())
 		if e != nil {
 			return e
@@ -255,6 +295,16 @@ func (a App) domain(args []string, cwd string) error {
 			return e
 		}
 		if e = config.SaveAtomic(c.ConfigPath, c.Config); e != nil {
+			return e
+		}
+		manager, e := dns.New(a.runner(), nil, a.In)
+		if e != nil {
+			return e
+		}
+		if e = manager.SyncProject(c.Config.Project.ID, domainNames(c.Config.Domains)); e != nil {
+			return e
+		}
+		if e = manager.Refresh(context.Background()); e != nil {
 			return e
 		}
 		_ = project.EnsureGitExclude(c.ProjectRoot)
@@ -278,10 +328,72 @@ func (a App) domain(args []string, cwd string) error {
 			return errors.New("domain is not configured")
 		}
 		c.Config.Domains = ds
-		return config.SaveAtomic(c.ConfigPath, c.Config)
+		if err := config.SaveAtomic(c.ConfigPath, c.Config); err != nil {
+			return err
+		}
+		manager, err := dns.New(a.runner(), nil, a.In)
+		if err != nil {
+			return err
+		}
+		if err := manager.SyncProject(c.Config.Project.ID, domainNames(c.Config.Domains)); err != nil {
+			return err
+		}
+		return manager.Refresh(context.Background())
 	}
 	return errors.New("unknown domain subcommand")
 }
+func domainNames(domains []config.DomainRoute) []string {
+	names := make([]string, 0, len(domains))
+	for _, domain := range domains {
+		names = append(names, domain.Name)
+	}
+	return names
+}
+func hostExecutable(name string) (string, error) {
+	for _, dir := range filepath.SplitList(os.Getenv("PATH")) {
+		if dir == "" {
+			dir = "."
+		}
+		candidate := filepath.Join(dir, name)
+		if managedShim(candidate, dir, name) {
+			continue
+		}
+		info, err := os.Stat(candidate)
+		if err != nil || info.IsDir() || info.Mode().Perm()&0111 == 0 {
+			continue
+		}
+		return candidate, nil
+	}
+	return "", exec.ErrNotFound
+}
+
+func managedShim(candidate, dir, name string) bool {
+	st, err := os.Lstat(candidate)
+	if err != nil || st.Mode()&os.ModeSymlink == 0 {
+		return false
+	}
+	target, err := os.Readlink(candidate)
+	if err != nil {
+		return false
+	}
+	if !filepath.IsAbs(target) {
+		target = filepath.Join(dir, target)
+	}
+	if filepath.Clean(target) == filepath.Clean(filepath.Join(dir, "laradev")) {
+		return true
+	}
+	manifest, err := readManifest(filepath.Join(dir, ".laradev-install.json"))
+	if err != nil || !manifest.valid() {
+		return false
+	}
+	for _, shim := range manifest.Shims {
+		if shim == name {
+			return filepath.Clean(target) == filepath.Clean(filepath.Join(dir, manifest.Binary))
+		}
+	}
+	return false
+}
+
 func Dynamic(name string, args []string, a App) error {
 	cwd, _ := os.Getwd()
 	if c, e := project.Resolve(cwd); e == nil {
@@ -291,7 +403,7 @@ func Dynamic(name string, args []string, a App) error {
 			}
 		}
 	}
-	path, err := exec.LookPath(name)
+	path, err := hostExecutable(name)
 	if err != nil {
 		return fmt.Errorf("%s: command not found", name)
 	}

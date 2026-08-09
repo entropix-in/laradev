@@ -13,16 +13,32 @@ import (
 	"time"
 
 	"github.com/rohan2388/laradev/internal/config"
+	"github.com/rohan2388/laradev/internal/dns"
 	"github.com/rohan2388/laradev/internal/docker"
+	"github.com/rohan2388/laradev/internal/host"
 	"github.com/rohan2388/laradev/internal/project"
 	"github.com/rohan2388/laradev/internal/proxy"
 )
 
 const managedLabel = "com.laradev.managed=true"
 
-type Lifecycle struct{ Runner docker.CommandRunner }
+type Lifecycle struct {
+	Runner docker.CommandRunner
+	Host   host.CommandRunner
+	Input  io.Reader
+}
 
 func (l Lifecycle) resources() docker.Resources { return docker.Resources{Runner: l.Runner} }
+func (l Lifecycle) dnsManager() (*dns.Manager, error) {
+	return dns.New(l.Runner, l.Host, l.Input)
+}
+func (l Lifecycle) refreshDNS(ctx context.Context) error {
+	manager, err := l.dnsManager()
+	if err != nil {
+		return err
+	}
+	return manager.Refresh(ctx)
+}
 func (l Lifecycle) names(c project.Context) (string, string, string, string) {
 	id := c.Config.Project.ID
 	return "laradev-" + id + "-network", "laradev-" + id + "-mysql", "laradev-" + id + "-phpmyadmin", "laradev-" + id + "-www-" + c.WorktreeID
@@ -71,6 +87,16 @@ func (l Lifecycle) Up(ctx context.Context, c project.Context) error {
 		if err := p.Reconcile(ctx, rs); err != nil {
 			return err
 		}
+	}
+	manager, err := l.dnsManager()
+	if err != nil {
+		return err
+	}
+	if err := manager.SyncProject(c.Config.Project.ID, domainNames(c.Config.Domains)); err != nil {
+		return err
+	}
+	if err := manager.Refresh(ctx); err != nil {
+		return err
 	}
 	return nil
 }
@@ -166,6 +192,9 @@ func (l Lifecycle) Stop(ctx context.Context, c project.Context) error {
 		mysql := "laradev-" + c.Config.Project.ID + "-mysql"
 		_ = l.Runner.Run(ctx, []string{"stop", mysql}, nil, io.Discard, io.Discard)
 	}
+	if err := l.refreshDNS(ctx); err != nil {
+		return err
+	}
 	return nil
 }
 func (l Lifecycle) Down(ctx context.Context, c project.Context) error {
@@ -190,6 +219,9 @@ func (l Lifecycle) StopAll(ctx context.Context) error {
 	for _, id := range strings.Fields(out) {
 		_ = l.Runner.Run(ctx, []string{"stop", id}, nil, io.Discard, io.Discard)
 	}
+	if err := l.refreshDNS(ctx); err != nil {
+		return err
+	}
 	return nil
 }
 func (l Lifecycle) Cleanup(ctx context.Context) error {
@@ -199,6 +231,9 @@ func (l Lifecycle) Cleanup(ctx context.Context) error {
 	}
 	for _, id := range strings.Fields(out) {
 		_ = l.Runner.Run(ctx, []string{"rm", "-f", id}, nil, io.Discard, io.Discard)
+	}
+	if err := l.refreshDNS(ctx); err != nil {
+		return err
 	}
 	return nil
 }

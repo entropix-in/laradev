@@ -18,16 +18,23 @@ The project is designed for a host with Docker but does not require a host Go, P
 ## Requirements
 
 - Linux/amd64 is the supported build target.
-- Docker Engine running and usable by the current user.
+- Docker Engine must be running and usable by the current user.
 - Docker images for the selected Laravel runtime, for example:
   - `rohan2388/laravel-server:php8.1-node22`
   - `rohan2388/laravel-server:php8.2-node22`
   - `rohan2388/laravel-server:php8.3-node22`
   - `rohan2388/laravel-server:php8.4-node22`
+- Ubuntu with `systemd-resolved` active is required for automatic `.test`
+  split-DNS routing.
+- The first active `.test` route uses `sudo` once to install the single
+  laradev-owned systemd-resolved drop-in. Later domain changes do not require
+  `sudo`.
+- Docker can pull `dockurr/dnsmasq:latest` for the managed DNS container.
 - `mkcert` is required only for HTTPS certificate generation.
 - `make` is required for the Dockerized build workflow.
 
-The default generated configuration publishes www ports `80:80` and `5173:5173` on localhost. phpMyAdmin defaults to `127.0.0.1:88`.
+The default generated configuration publishes www ports `80:80` and `5173:5173`
+on localhost. phpMyAdmin defaults to `127.0.0.1:88`.
 
 ## Build, test, and install
 
@@ -351,16 +358,44 @@ Remove a domain:
 laradev domain remove ws.myapp.test
 ```
 
-`domain add` validates the hostname, ensures a `mkcert` certificate, and writes the route to the canonical project config. The port is the TCP port inside www; it does not need to be published in `www.ports` for Caddy routing.
+`domain add` validates the hostname, ensures a `mkcert` certificate, writes the
+route to the canonical project config, and updates the DNS manifest. The port
+is the TCP port inside www; it does not need to be published in `www.ports` for
+Caddy routing.
 
-Add local host mappings outside laradev when needed:
+### Explicit `.test` DNS
 
-```text
-127.0.0.1 myapp.test
-127.0.0.1 ws.myapp.test
+laradev runs `dockurr/dnsmasq:latest` in the managed container
+`laradev-dnsmasq`, bound only to `127.0.0.1:15353` for both TCP and UDP. A
+route is sent to dnsmasq only when its project www container is running.
+
+The first active `.test` route installs
+`/etc/systemd/resolved.conf.d/laradev-dns.conf` with `sudo`; this is the only
+host resolver file laradev owns. The drop-in routes only `~test` to dnsmasq.
+Later `domain add`, `domain remove`, and refresh operations do not require
+`sudo`. laradev never edits `/etc/hosts`, `/etc/resolv.conf`, or
+NetworkManager profiles.
+
+Use the manual controls:
+
+```bash
+laradev dns status
+laradev dns start
+laradev dns refresh
+laradev dns stop
 ```
 
-laradev never edits `/etc/hosts` or DNS.
+An apex and wildcard are separate entries:
+
+```bash
+laradev domain add mydomain.test
+laradev domain add '*.mydomain.test'
+```
+
+The first command routes only `mydomain.test`; the second routes supported
+subdomains such as `api.mydomain.test`. The wildcard does not synthesize or
+replace the apex. Unregistered `.test` names are not mapped to
+`127.0.0.1`. `domain remove` removes exactly the named entry.
 
 The global proxy uses:
 

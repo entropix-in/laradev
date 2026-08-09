@@ -248,13 +248,21 @@ func ValidateCommand(s string) error {
 func MandatoryCommands() []string { return append([]string(nil), mandatory...) }
 
 func ValidateHostname(name string) error {
-	if name == "" || strings.ContainsAny(name, "/:?*[]%") || strings.Contains(name, "..") || strings.HasPrefix(name, ".") || strings.HasSuffix(name, ".") {
+	if name == "" {
 		return fmt.Errorf("invalid domain %q", name)
 	}
-	if net.ParseIP(name) != nil || strings.HasPrefix(name, "*.") {
+	wildcard := strings.HasPrefix(name, "*.")
+	if strings.Contains(name, "*") && !wildcard {
+		return fmt.Errorf("invalid wildcard domain %q", name)
+	}
+	base := strings.TrimPrefix(name, "*.")
+	if base == "" || strings.ContainsAny(base, "/:?[]%") || strings.Contains(base, "..") || strings.HasPrefix(base, ".") || strings.HasSuffix(base, ".") {
 		return fmt.Errorf("invalid domain %q", name)
 	}
-	for _, label := range strings.Split(name, ".") {
+	if net.ParseIP(base) != nil {
+		return fmt.Errorf("invalid domain %q", name)
+	}
+	for _, label := range strings.Split(base, ".") {
 		if label == "" || len(label) > 63 || label[0] == '-' || label[len(label)-1] == '-' {
 			return fmt.Errorf("invalid domain %q", name)
 		}
@@ -266,6 +274,8 @@ func ValidateHostname(name string) error {
 	}
 	return nil
 }
+
+func IsWildcardHostname(name string) bool { return strings.HasPrefix(name, "*.") }
 
 func Load(path string) (Config, error) {
 	st, err := os.Lstat(path)

@@ -14,6 +14,7 @@ func TestHelpDispatchDoesNotRequireProjectOrDocker(t *testing.T) {
 	}{
 		{name: "top short", args: []string{"-h"}, want: "laradev - isolated Laravel development environments"},
 		{name: "top long", args: []string{"--help"}, want: "PROJECT COMMANDS"},
+		{name: "dns", args: []string{"dns", "-h"}, want: "laradev dns start"},
 		{name: "domain", args: []string{"domain", "-h"}, want: "laradev domain list"},
 		{name: "domain add", args: []string{"domain", "add", "-h"}, want: "laradev domain add <hostname>"},
 		{name: "command", args: []string{"command", "--help"}, want: "commands.forward"},
