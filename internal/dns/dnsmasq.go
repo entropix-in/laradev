@@ -25,6 +25,8 @@ const (
 	ResolverFile  = "/etc/systemd/resolved.conf.d/laradev-dns.conf"
 )
 
+var localDNSSuffixes = [...]string{".test", ".vm"}
+
 type Route struct {
 	Domain    string `json:"domain"`
 	ProjectID string `json:"project_id"`
@@ -131,7 +133,7 @@ func (m *Manager) Refresh(ctx context.Context) error {
 		return err
 	}
 	if len(activeRoutes) == 0 {
-		return m.stopContainer(ctx)
+		return m.Stop(ctx)
 	}
 	if err := m.preflightContainerPort(ctx); err != nil {
 		return err
@@ -148,7 +150,15 @@ func (m *Manager) Refresh(ctx context.Context) error {
 func (m *Manager) Start(ctx context.Context) error { return m.Refresh(ctx) }
 
 func (m *Manager) Stop(ctx context.Context) error {
-	return m.stopContainer(ctx)
+	stopErr := m.stopContainer(ctx)
+	removeErr := m.Resolver.Remove(ctx)
+	if stopErr != nil && removeErr != nil {
+		return errors.Join(stopErr, removeErr)
+	}
+	if stopErr != nil {
+		return stopErr
+	}
+	return removeErr
 }
 
 func (m *Manager) Status(ctx context.Context, w io.Writer) error {
@@ -288,15 +298,21 @@ func ValidateDomain(domain string) error {
 		return err
 	}
 	base := strings.TrimPrefix(name, "*.")
-	if !strings.HasSuffix(base, ".test") {
-		return fmt.Errorf("laradev DNS domains must use the .test suffix: %q", domain)
+	for _, suffix := range localDNSSuffixes {
+		if strings.HasSuffix(base, suffix) {
+			return nil
+		}
 	}
-	return nil
+	return fmt.Errorf("laradev DNS domains must use the .test or .vm suffix: %q", domain)
 }
 
 func writeConfig(path string, routes []Route) error {
 	var b strings.Builder
-	b.WriteString("no-resolv\nno-hosts\nno-poll\nbind-interfaces\nlisten-address=0.0.0.0\nport=53\nlocal=/test/\ncache-size=0\n")
+	b.WriteString("no-resolv\nno-hosts\nno-poll\nbind-interfaces\nlisten-address=0.0.0.0\nport=53\n")
+	for _, suffix := range localDNSSuffixes {
+		fmt.Fprintf(&b, "local=/%s/\n", strings.TrimPrefix(suffix, "."))
+	}
+	b.WriteString("cache-size=0\n")
 	wildcards := make([]string, 0)
 	for _, route := range routes {
 		if strings.HasPrefix(route.Domain, "*.") {

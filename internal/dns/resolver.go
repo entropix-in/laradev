@@ -13,7 +13,10 @@ import (
 	"github.com/rohan2388/laradev/internal/host"
 )
 
-const resolverConfig = "# Managed by laradev. Do not edit.\n[Resolve]\nDNS=127.0.0.1:15353\nDomains=~test\n"
+const (
+	resolverConfig       = "# Managed by laradev. Do not edit.\n[Resolve]\nDNS=127.0.0.1:15353\nDomains=~test ~vm\n"
+	legacyResolverConfig = "# Managed by laradev. Do not edit.\n[Resolve]\nDNS=127.0.0.1:15353\nDomains=~test\n"
+)
 
 type Resolver struct {
 	Runner        host.CommandRunner
@@ -30,10 +33,16 @@ func (r *Resolver) Ensure(ctx context.Context) error {
 		if st.Mode()&os.ModeSymlink != 0 || !st.Mode().IsRegular() {
 			return fmt.Errorf("refusing existing resolver path %s", r.Path)
 		}
-		if r.MatchesExisting() {
+		data, readErr := os.ReadFile(r.Path)
+		if readErr != nil {
+			return readErr
+		}
+		if string(data) == resolverConfig {
 			return nil
 		}
-		return fmt.Errorf("refusing existing resolver file %s: it is not laradev-owned", r.Path)
+		if string(data) != legacyResolverConfig {
+			return fmt.Errorf("refusing existing resolver file %s: it is not laradev-owned", r.Path)
+		}
 	} else if !os.IsNotExist(err) {
 		return err
 	}
@@ -73,9 +82,6 @@ func (r *Resolver) Ensure(ctx context.Context) error {
 }
 
 func (r *Resolver) Remove(ctx context.Context) error {
-	if err := r.preflight(ctx); err != nil {
-		return err
-	}
 	st, err := os.Lstat(r.Path)
 	if os.IsNotExist(err) {
 		return nil
@@ -89,12 +95,15 @@ func (r *Resolver) Remove(ctx context.Context) error {
 	if err := r.removePrivileged(ctx); err != nil {
 		return err
 	}
+	if err := r.Runner.Run(ctx, []string{"systemctl", "is-active", "--quiet", "systemd-resolved"}, r.Input, io.Discard, io.Discard); err != nil {
+		return nil
+	}
 	return r.reload(ctx)
 }
 
 func (r *Resolver) MatchesExisting() bool {
 	data, err := os.ReadFile(r.Path)
-	return err == nil && string(data) == resolverConfig
+	return err == nil && (string(data) == resolverConfig || string(data) == legacyResolverConfig)
 }
 
 func (r *Resolver) preflight(ctx context.Context) error {

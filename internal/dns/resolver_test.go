@@ -40,6 +40,57 @@ func TestResolverMatchingFileNeedsNoPrivilegedRefresh(t *testing.T) {
 	}
 }
 
+func TestResolverUpgradesLegacyFile(t *testing.T) {
+	path := t.TempDir() + "/laradev-dns.conf"
+	if err := os.WriteFile(path, []byte(legacyResolverConfig), 0600); err != nil {
+		t.Fatal(err)
+	}
+	runner := &recordingHostRunner{}
+	resolver := &Resolver{Runner: runner, Path: path, OSReleasePath: testOSRelease(t)}
+	if err := resolver.Ensure(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if len(runner.calls) != 5 {
+		t.Fatalf("unexpected host calls: %#v", runner.calls)
+	}
+	if !strings.HasPrefix(strings.Join(runner.calls[2], " "), "sudo install -m 0644 ") {
+		t.Fatalf("expected resolver installation, got %#v", runner.calls[2])
+	}
+}
+
+func TestResolverRemoveMissingFileIsNoop(t *testing.T) {
+	runner := &recordingHostRunner{}
+	resolver := &Resolver{Runner: runner, Path: t.TempDir() + "/laradev-dns.conf", OSReleasePath: testOSRelease(t)}
+	if err := resolver.Remove(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if len(runner.calls) != 0 {
+		t.Fatalf("unexpected host calls: %#v", runner.calls)
+	}
+}
+
+func TestResolverRemoveManagedFile(t *testing.T) {
+	path := t.TempDir() + "/laradev-dns.conf"
+	if err := os.WriteFile(path, []byte(resolverConfig), 0600); err != nil {
+		t.Fatal(err)
+	}
+	runner := &recordingHostRunner{}
+	resolver := &Resolver{Runner: runner, Path: path, OSReleasePath: testOSRelease(t)}
+	if err := resolver.Remove(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	removed := false
+	for _, call := range runner.calls {
+		if strings.Join(call, " ") == "sudo rm -f "+path {
+			removed = true
+			break
+		}
+	}
+	if !removed {
+		t.Fatalf("resolver removal was not requested: %#v", runner.calls)
+	}
+}
+
 func TestResolverRejectsUnownedExistingFile(t *testing.T) {
 	path := t.TempDir() + "/laradev-dns.conf"
 	if err := os.WriteFile(path, []byte("[Resolve]\nDNS=8.8.8.8\n"), 0600); err != nil {

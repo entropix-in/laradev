@@ -192,10 +192,10 @@ const dnsHelp = `USAGE
   laradev dns refresh
   laradev dns status
 
-Manage the Docker dnsmasq container used for explicit .test domains. The first
-active .test route installs one laradev-owned systemd-resolved drop-in with
+Manage the Docker dnsmasq container used for explicit .test and .vm domains.
+The first active route installs one laradev-owned systemd-resolved drop-in with
 sudo. Later route refreshes do not require sudo. Only configured apex and
-wildcard routes resolve to 127.0.0.1; arbitrary .test names do not.
+wildcard routes resolve to 127.0.0.1; arbitrary .test and .vm names do not.
 `
 const stopAllHelp = `USAGE
   laradev stop-all
@@ -303,15 +303,16 @@ const domainHelp = `USAGE
   laradev domain remove <hostname>
 
 Manage project HTTPS routes through the global Docker Caddy proxy. Domain names
-are normalized to lowercase. The route port is the TCP port inside the www
-container and does not need a host publication. .test domains also receive
-explicit Docker dnsmasq routing; wildcard entries are supported. Add requires
-mkcert.
+are normalized to lowercase and must use the .test or .vm suffix. The route port
+is the TCP port inside the www container and does not need a host publication.
+Supported domains receive explicit Docker dnsmasq routing; wildcard entries are
+supported. Add requires mkcert.
 
 EXAMPLES
   laradev domain list
   laradev domain add myapp.test
   laradev domain add '*.myapp.test'
+  laradev domain add gkb.vm
   laradev domain add ws.myapp.test --port 8080
   laradev domain remove ws.myapp.test
 `

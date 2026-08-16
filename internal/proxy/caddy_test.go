@@ -26,17 +26,26 @@ func (r *recordingRunner) Run(_ context.Context, args []string, _ io.Reader, std
 	return nil
 }
 
-func TestCaddyContainerMountsConfigFileNotReadOnlyParent(t *testing.T) {
+func TestCaddyContainerMountsConfigDirectory(t *testing.T) {
 	args := caddyContainerArgs("/state/caddy/Caddyfile", "/state")
 	joined := strings.Join(args, " ")
-	if !strings.Contains(joined, "/state/caddy/Caddyfile:/etc/caddy/Caddyfile:ro") {
-		t.Fatalf("missing Caddyfile bind mount: %v", args)
+	if !strings.Contains(joined, "/state/caddy:/etc/caddy-config:ro") {
+		t.Fatalf("missing Caddyfile directory bind mount: %v", args)
 	}
 	if !strings.Contains(joined, "/state/certs:/etc/caddy/certs:ro") {
 		t.Fatalf("missing certificate bind mount: %v", args)
 	}
-	if strings.Contains(joined, "/state/caddy:/etc/caddy:ro") {
-		t.Fatalf("read-only parent mount prevents nested certificate mount: %v", args)
+	if !strings.Contains(joined, "--config /etc/caddy-config/Caddyfile --adapter caddyfile") {
+		t.Fatalf("missing Caddy config path: %v", args)
+	}
+}
+
+func TestHasMountDestination(t *testing.T) {
+	if !hasMountDestination("/data\n/etc/caddy-config\n", "/etc/caddy-config") {
+		t.Fatal("expected Caddy config mount to be found")
+	}
+	if hasMountDestination("/data\n/etc/caddy-config-old\n", "/etc/caddy-config") {
+		t.Fatal("unexpectedly matched a similarly named mount")
 	}
 }
 

@@ -35,6 +35,8 @@ type Proxy struct {
 	StateDir string
 }
 
+const caddyConfigPath = "/etc/caddy-config/Caddyfile"
+
 func New(r docker.CommandRunner) (*Proxy, error) {
 	d, err := state.Dir()
 	if err != nil {
@@ -240,6 +242,16 @@ func (p *Proxy) ensureContainer(ctx context.Context) error {
 	if strings.TrimSpace(ownership.String()) != "true|caddy" {
 		return errors.New("refusing existing laradev-caddy container without laradev Caddy ownership labels")
 	}
+	var mounts strings.Builder
+	if err := p.Runner.Run(ctx, []string{"inspect", "--format", `{{range .Mounts}}{{.Destination}}{{"\n"}}{{end}}`, "laradev-caddy"}, nil, &mounts, io.Discard); err != nil {
+		return fmt.Errorf("inspect Caddy mounts: %w", err)
+	}
+	if !hasMountDestination(mounts.String(), filepath.Dir(caddyConfigPath)) {
+		if err := p.Runner.Run(ctx, []string{"rm", "-f", "laradev-caddy"}, nil, io.Discard, io.Discard); err != nil {
+			return fmt.Errorf("recreate Caddy container: %w", err)
+		}
+		return create()
+	}
 	var startErr strings.Builder
 	if err := p.Runner.Run(ctx, []string{"start", "laradev-caddy"}, nil, io.Discard, &startErr); err != nil {
 		if removeErr := p.Runner.Run(ctx, []string{"rm", "-f", "laradev-caddy"}, nil, io.Discard, io.Discard); removeErr != nil {
@@ -248,14 +260,23 @@ func (p *Proxy) ensureContainer(ctx context.Context) error {
 		return create()
 	}
 	var reloadErr strings.Builder
-	if err := p.Runner.Run(ctx, []string{"exec", "laradev-caddy", "caddy", "reload", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"}, nil, io.Discard, &reloadErr); err != nil {
+	if err := p.Runner.Run(ctx, []string{"exec", "laradev-caddy", "caddy", "reload", "--config", caddyConfigPath, "--adapter", "caddyfile"}, nil, io.Discard, &reloadErr); err != nil {
 		return fmt.Errorf("reload Caddy: %s: %w", strings.TrimSpace(reloadErr.String()), err)
 	}
 	return nil
 }
 
 func caddyContainerArgs(caddyfile, stateDir string) []string {
-	return []string{"run", "-d", "--name", "laradev-caddy", "--network", "laradev-proxy", "--label", "com.laradev.managed=true", "--label", "com.laradev.role=caddy", "-p", "127.0.0.1:443:443", "-v", caddyfile + ":/etc/caddy/Caddyfile:ro", "-v", filepath.Join(stateDir, "certs") + ":/etc/caddy/certs:ro", "-v", "laradev-caddy-data:/data", "-v", "laradev-caddy-config:/config", "caddy:2-alpine"}
+	return []string{"run", "-d", "--name", "laradev-caddy", "--network", "laradev-proxy", "--label", "com.laradev.managed=true", "--label", "com.laradev.role=caddy", "-p", "127.0.0.1:443:443", "-v", filepath.Dir(caddyfile) + ":" + filepath.Dir(caddyConfigPath) + ":ro", "-v", filepath.Join(stateDir, "certs") + ":/etc/caddy/certs:ro", "-v", "laradev-caddy-data:/data", "-v", "laradev-caddy-config:/config", "caddy:2-alpine", "caddy", "run", "--config", caddyConfigPath, "--adapter", "caddyfile"}
+}
+
+func hasMountDestination(mounts, destination string) bool {
+	for _, mount := range strings.Fields(mounts) {
+		if mount == destination {
+			return true
+		}
+	}
+	return false
 }
 func LoadRoutes(stateDir string) ([]Route, error) {
 	b, err := os.ReadFile(filepath.Join(stateDir, "caddy", "routes.json"))

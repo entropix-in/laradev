@@ -24,9 +24,9 @@ The project is designed for a host with Docker but does not require a host Go, P
   - `rohan2388/laravel-server:php8.2-node22`
   - `rohan2388/laravel-server:php8.3-node22`
   - `rohan2388/laravel-server:php8.4-node22`
-- Ubuntu with `systemd-resolved` active is required for automatic `.test`
-  split-DNS routing.
-- The first active `.test` route uses `sudo` once to install the single
+- Ubuntu with `systemd-resolved` active is required for automatic `.test` and
+  `.vm` split-DNS routing.
+- The first active `.test` or `.vm` route uses `sudo` once to install the single
   laradev-owned systemd-resolved drop-in. Later domain changes do not require
   `sudo`.
 - Docker can pull `dockurr/dnsmasq:latest` for the managed DNS container.
@@ -363,17 +363,18 @@ route to the canonical project config, and updates the DNS manifest. The port
 is the TCP port inside www; it does not need to be published in `www.ports` for
 Caddy routing.
 
-### Explicit `.test` DNS
+### Explicit `.test` and `.vm` DNS
 
 laradev runs `dockurr/dnsmasq:latest` in the managed container
 `laradev-dnsmasq`, bound only to `127.0.0.1:15353` for both TCP and UDP. A
 route is sent to dnsmasq only when its project www container is running.
 
-The first active `.test` route installs
+The first active `.test` or `.vm` route installs
 `/etc/systemd/resolved.conf.d/laradev-dns.conf` with `sudo`; this is the only
-host resolver file laradev owns. The drop-in routes only `~test` to dnsmasq.
-Later `domain add`, `domain remove`, and refresh operations do not require
-`sudo`. laradev never edits `/etc/hosts`, `/etc/resolv.conf`, or
+host resolver file laradev owns. The drop-in routes `~test` and `~vm` to
+dnsmasq. Later `domain add`, `domain remove`, and refresh operations do not
+require `sudo`. Stopping DNS removes the laradev-owned resolver drop-in.
+laradev never edits `/etc/hosts`, `/etc/resolv.conf`, or
 NetworkManager profiles.
 
 Use the manual controls:
@@ -390,11 +391,12 @@ An apex and wildcard are separate entries:
 ```bash
 laradev domain add mydomain.test
 laradev domain add '*.mydomain.test'
+laradev domain add gkb.vm
 ```
 
 The first command routes only `mydomain.test`; the second routes supported
 subdomains such as `api.mydomain.test`. The wildcard does not synthesize or
-replace the apex. Unregistered `.test` names are not mapped to
+replace the apex. Unregistered `.test` and `.vm` names are not mapped to
 `127.0.0.1`. `domain remove` removes exactly the named entry.
 
 The global proxy uses:
