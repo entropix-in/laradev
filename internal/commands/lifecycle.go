@@ -58,7 +58,7 @@ func (l Lifecycle) Up(ctx context.Context, c project.Context) error {
 		}
 	}
 	routes, _ := json.Marshal(c.Config.Domains)
-	labels := []string{"--label", managedLabel, "--label", "com.laradev.project-id=" + c.Config.Project.ID, "--label", "com.laradev.role=www", "--label", "com.laradev.worktree-id=" + c.WorktreeID, "--label", "com.laradev.project-root=" + c.ProjectRoot, "--label", "com.laradev.worktree-root=" + c.WorktreeRoot, "--label", "com.laradev.routes=" + string(routes)}
+	labels := []string{"--label", managedLabel, "--label", "com.laradev.project-id=" + c.Config.Project.ID, "--label", "com.laradev.role=www", "--label", "com.laradev.worktree-id=" + c.WorktreeID, "--label", "com.laradev.project-root=" + c.ProjectRoot, "--label", "com.laradev.worktree-root=" + c.WorktreeRoot, "--label", "com.laradev.routes=" + string(routes), "--label", "com.laradev.host-bindings=" + strings.Join(c.Config.WWW.Ports, ",")}
 	if err := l.ensureWWW(ctx, c, network, www, labels); err != nil {
 		return err
 	}
@@ -166,7 +166,7 @@ func (l Lifecycle) ensureWWW(ctx context.Context, c project.Context, network, ww
 	}
 	for _, mapping := range c.Config.WWW.Ports {
 		h, t, _ := config.ParsePort(mapping)
-		args = append(args, "-p", fmt.Sprintf("127.0.0.1:%d:%d", h, t))
+		args = append(args, "-p", fmt.Sprintf("0.0.0.0:%d:%d", h, t))
 	}
 	args = append(args, "-v", c.WorktreeRoot+":/app", "-w", "/app", "-e", "WEB_DOCUMENT_ROOT=/app/public")
 	if c.Config.MySQL.Enabled {

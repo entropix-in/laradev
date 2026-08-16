@@ -34,7 +34,8 @@ The project is designed for a host with Docker but does not require a host Go, P
 - `make` is required for the Dockerized build workflow.
 
 The default generated configuration publishes www ports `80:80` and `5173:5173`
-on localhost. phpMyAdmin defaults to `127.0.0.1:88`.
+on all host interfaces (`0.0.0.0`). phpMyAdmin remains restricted to
+`127.0.0.1:88`.
 
 ## Build, test, and install
 
@@ -233,7 +234,8 @@ value without echoing the password into terminal history or logs.
 - `laradev-<project-id>-phpmyadmin` when MySQL is enabled
 - `laradev-caddy` when domains are configured
 
-The current worktree is mounted at `/app`. www is published only on `127.0.0.1`. MySQL port `3306` is not published to the host.
+The current worktree is mounted at `/app`. www is published on all host
+interfaces. MySQL port `3306` is not published to the host.
 
 `status` shows project identity, service state, configured ports, and domains. Run it outside a project to list managed containers globally.
 
@@ -403,7 +405,7 @@ The global proxy uses:
 
 - Container: `laradev-caddy`
 - Network: `laradev-proxy`
-- Host binding: `127.0.0.1:443:443`
+- Host binding: `0.0.0.0:443:443`
 - Caddyfile: `$HOME/.config/laradev/caddy/Caddyfile`
 - Route manifest: `$HOME/.config/laradev/caddy/routes.json`
 - Certificates: `$HOME/.config/laradev/certs/<domain>/`

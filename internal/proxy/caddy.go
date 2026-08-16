@@ -36,6 +36,7 @@ type Proxy struct {
 }
 
 const caddyConfigPath = "/etc/caddy-config/Caddyfile"
+const caddyHostBinding = "0.0.0.0:443"
 
 func New(r docker.CommandRunner) (*Proxy, error) {
 	d, err := state.Dir()
@@ -236,11 +237,18 @@ func (p *Proxy) ensureContainer(ctx context.Context) error {
 		return create()
 	}
 	var ownership strings.Builder
-	if err := p.Runner.Run(ctx, []string{"inspect", "--format", `{{index .Config.Labels "com.laradev.managed"}}|{{index .Config.Labels "com.laradev.role"}}`, "laradev-caddy"}, nil, &ownership, io.Discard); err != nil {
+	if err := p.Runner.Run(ctx, []string{"inspect", "--format", `{{index .Config.Labels "com.laradev.managed"}}|{{index .Config.Labels "com.laradev.role"}}|{{index .Config.Labels "com.laradev.host-binding"}}`, "laradev-caddy"}, nil, &ownership, io.Discard); err != nil {
 		return fmt.Errorf("inspect Caddy ownership: %w", err)
 	}
-	if strings.TrimSpace(ownership.String()) != "true|caddy" {
+	parts := strings.Split(strings.TrimSpace(ownership.String()), "|")
+	if len(parts) < 2 || parts[0] != "true" || parts[1] != "caddy" {
 		return errors.New("refusing existing laradev-caddy container without laradev Caddy ownership labels")
+	}
+	if len(parts) < 3 || parts[2] != caddyHostBinding {
+		if err := p.Runner.Run(ctx, []string{"rm", "-f", "laradev-caddy"}, nil, io.Discard, io.Discard); err != nil {
+			return fmt.Errorf("recreate Caddy container: %w", err)
+		}
+		return create()
 	}
 	var mounts strings.Builder
 	if err := p.Runner.Run(ctx, []string{"inspect", "--format", `{{range .Mounts}}{{.Destination}}{{"\n"}}{{end}}`, "laradev-caddy"}, nil, &mounts, io.Discard); err != nil {
@@ -267,7 +275,7 @@ func (p *Proxy) ensureContainer(ctx context.Context) error {
 }
 
 func caddyContainerArgs(caddyfile, stateDir string) []string {
-	return []string{"run", "-d", "--name", "laradev-caddy", "--network", "laradev-proxy", "--label", "com.laradev.managed=true", "--label", "com.laradev.role=caddy", "-p", "127.0.0.1:443:443", "-v", filepath.Dir(caddyfile) + ":" + filepath.Dir(caddyConfigPath) + ":ro", "-v", filepath.Join(stateDir, "certs") + ":/etc/caddy/certs:ro", "-v", "laradev-caddy-data:/data", "-v", "laradev-caddy-config:/config", "caddy:2-alpine", "caddy", "run", "--config", caddyConfigPath, "--adapter", "caddyfile"}
+	return []string{"run", "-d", "--name", "laradev-caddy", "--network", "laradev-proxy", "--label", "com.laradev.managed=true", "--label", "com.laradev.role=caddy", "--label", "com.laradev.host-binding=" + caddyHostBinding, "-p", caddyHostBinding + ":443", "-v", filepath.Dir(caddyfile) + ":" + filepath.Dir(caddyConfigPath) + ":ro", "-v", filepath.Join(stateDir, "certs") + ":/etc/caddy/certs:ro", "-v", "laradev-caddy-data:/data", "-v", "laradev-caddy-config:/config", "caddy:2-alpine", "caddy", "run", "--config", caddyConfigPath, "--adapter", "caddyfile"}
 }
 
 func hasMountDestination(mounts, destination string) bool {

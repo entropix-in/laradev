@@ -38,6 +38,9 @@ func TestCaddyContainerMountsConfigDirectory(t *testing.T) {
 	if !strings.Contains(joined, "--config /etc/caddy-config/Caddyfile --adapter caddyfile") {
 		t.Fatalf("missing Caddy config path: %v", args)
 	}
+	if !strings.Contains(joined, "--label com.laradev.host-binding=0.0.0.0:443 -p 0.0.0.0:443:443") {
+		t.Fatalf("Caddy is not published on all host interfaces: %v", args)
+	}
 }
 
 func TestHasMountDestination(t *testing.T) {
