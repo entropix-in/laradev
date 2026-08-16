@@ -186,9 +186,15 @@ func (a App) install(args []string, cwd string) error {
 		if args[i] == "--bin-dir" && i+1 < len(args) {
 			binDir = args[i+1]
 			i++
+		} else if args[i] == "--bin-dir" {
+			return errors.New("usage: laradev install [--bin-dir DIR] [--shadow-host NAME]")
 		} else if args[i] == "--shadow-host" && i+1 < len(args) {
 			extra = append(extra, args[i+1])
 			i++
+		} else if args[i] == "--shadow-host" {
+			return errors.New("usage: laradev install [--bin-dir DIR] [--shadow-host NAME]")
+		} else {
+			return fmt.Errorf("unknown install option %q", args[i])
 		}
 	}
 	return Install(context.Background(), binDir, extra, cwd, a.In, a.Out, a.Err)
@@ -309,6 +315,9 @@ func (a App) domain(args []string, cwd string) error {
 		if e = config.SaveAtomic(c.ConfigPath, c.Config); e != nil {
 			return e
 		}
+		if e = a.reconcileDomainProxy(context.Background(), c); e != nil {
+			return e
+		}
 		manager, e := dns.New(a.runner(), nil, a.In)
 		if e != nil {
 			return e
@@ -343,6 +352,9 @@ func (a App) domain(args []string, cwd string) error {
 		if err := config.SaveAtomic(c.ConfigPath, c.Config); err != nil {
 			return err
 		}
+		if err := a.reconcileDomainProxy(context.Background(), c); err != nil {
+			return err
+		}
 		manager, err := dns.New(a.runner(), nil, a.In)
 		if err != nil {
 			return err
@@ -360,6 +372,22 @@ func domainNames(domains []config.DomainRoute) []string {
 		names = append(names, domain.Name)
 	}
 	return names
+}
+
+func (a App) reconcileDomainProxy(ctx context.Context, c project.Context) error {
+	p, err := proxy.New(a.runner())
+	if err != nil {
+		return err
+	}
+	_, _, _, www := (Lifecycle{}).names(c)
+	desired := []proxy.Route(nil)
+	if resource, inspectErr := (docker.Resources{Runner: a.runner()}).Inspect(ctx, www); inspectErr == nil && resource.State == "running" {
+		desired = make([]proxy.Route, 0, len(c.Config.Domains))
+		for _, domain := range c.Config.Domains {
+			desired = append(desired, proxy.Route{Domain: domain.Name, ProjectID: c.Config.Project.ID, WorktreeID: c.WorktreeID, Backend: www, Port: domain.Port})
+		}
+	}
+	return p.ReconcileProject(ctx, c.Config.Project.ID, c.WorktreeID, desired)
 }
 func hostExecutable(name string) (string, error) {
 	for _, dir := range filepath.SplitList(os.Getenv("PATH")) {

@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"io"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -49,6 +51,66 @@ func TestHasMountDestination(t *testing.T) {
 	}
 	if hasMountDestination("/data\n/etc/caddy-config-old\n", "/etc/caddy-config") {
 		t.Fatal("unexpectedly matched a similarly named mount")
+	}
+}
+
+func TestMergeProjectRoutesPreservesOtherWorktrees(t *testing.T) {
+	routes := []Route{
+		{Domain: "app.test", ProjectID: "project-a", WorktreeID: "worktree-a", Backend: "www-a", Port: 80},
+		{Domain: "old.test", ProjectID: "project-b", WorktreeID: "worktree-b", Backend: "www-b", Port: 80},
+	}
+	desired := []Route{{Domain: "new.test", ProjectID: "project-a", WorktreeID: "worktree-a", Backend: "www-a", Port: 8080}}
+	got := mergeProjectRoutes(routes, "project-a", "worktree-a", desired)
+	if len(got) != 2 {
+		t.Fatalf("got %d routes, want 2: %#v", len(got), got)
+	}
+	if got[0].Domain != "old.test" || got[1].Domain != "new.test" {
+		t.Fatalf("unexpected merged routes: %#v", got)
+	}
+}
+
+func TestMergeProjectRoutesRemovesAllRoutesWhenDesiredIsEmpty(t *testing.T) {
+	routes := []Route{
+		{Domain: "app.test", ProjectID: "project-a", WorktreeID: "worktree-a"},
+		{Domain: "other.test", ProjectID: "project-a", WorktreeID: "worktree-b"},
+	}
+	got := mergeProjectRoutes(routes, "project-a", "worktree-a", nil)
+	if len(got) != 1 || got[0].Domain != "other.test" {
+		t.Fatalf("unexpected routes after removal: %#v", got)
+	}
+}
+
+func TestEnsureCertificateInitializesMissingMkcertRoot(t *testing.T) {
+	root := t.TempDir()
+	bin := t.TempDir()
+	mkcert := filepath.Join(bin, "mkcert")
+	script := `#!/bin/sh
+case "$1" in
+  -CAROOT) printf '%s\n' "$MKCERT_ROOT" ;;
+  -install) printf 'root certificate\n' > "$MKCERT_ROOT/rootCA.pem" ;;
+  -cert-file) printf 'certificate\n' > "$2"; printf 'key\n' > "$4" ;;
+esac
+`
+	if err := os.WriteFile(mkcert, []byte(script), 0755); err != nil {
+		t.Fatal(err)
+	}
+	oldPath := os.Getenv("PATH")
+	if err := os.Setenv("PATH", bin+string(os.PathListSeparator)+oldPath); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Setenv("MKCERT_ROOT", root); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_ = os.Setenv("PATH", oldPath)
+		_ = os.Unsetenv("MKCERT_ROOT")
+	})
+
+	if err := (&Proxy{StateDir: t.TempDir()}).EnsureCertificate("app.test"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "rootCA.pem")); err != nil {
+		t.Fatalf("mkcert root was not initialized: %v", err)
 	}
 }
 

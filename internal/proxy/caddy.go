@@ -69,7 +69,16 @@ func (p *Proxy) EnsureCertificate(name string) error {
 	caroot := strings.TrimSpace(string(carootOut))
 	root, err := os.ReadFile(filepath.Join(caroot, "rootCA.pem"))
 	if err != nil {
-		return fmt.Errorf("read mkcert root: %w", err)
+		if !os.IsNotExist(err) {
+			return fmt.Errorf("read mkcert root: %w", err)
+		}
+		if installErr := exec.Command("mkcert", "-install").Run(); installErr != nil {
+			return fmt.Errorf("mkcert -install: %w", installErr)
+		}
+		root, err = os.ReadFile(filepath.Join(caroot, "rootCA.pem"))
+		if err != nil {
+			return fmt.Errorf("read mkcert root after install: %w", err)
+		}
 	}
 	sum := sha256.Sum256(root)
 	markerPath := filepath.Join(p.StateDir, "mkcert-trust.json")
@@ -167,6 +176,14 @@ func (p *Proxy) Reconcile(ctx context.Context, routes []Route) error {
 		return err
 	}
 	for _, r := range routes {
+		for _, existing := range routes {
+			if existing.Domain == r.Domain && existing.ProjectID != r.ProjectID {
+				return fmt.Errorf("domain %q is already routed by project %s", r.Domain, existing.ProjectID)
+			}
+			if existing.Domain == r.Domain && existing.WorktreeID != r.WorktreeID {
+				return fmt.Errorf("domain %q is already routed by another worktree", r.Domain)
+			}
+		}
 		if err := p.EnsureCertificate(r.Domain); err != nil {
 			return err
 		}
@@ -202,9 +219,40 @@ func (p *Proxy) Reconcile(ctx context.Context, routes []Route) error {
 		return err
 	}
 	if len(routes) == 0 {
+		out, err := (docker.Resources{Runner: p.Runner}).Output(ctx, "ps", "-aq", "--filter", "name=^/?laradev-caddy$")
+		if err != nil {
+			return fmt.Errorf("inspect Caddy before stopping: %w", err)
+		}
+		if strings.TrimSpace(out) == "" {
+			return nil
+		}
 		return p.Runner.Run(ctx, []string{"stop", "laradev-caddy"}, nil, io.Discard, io.Discard)
 	}
 	return p.ensureContainer(ctx)
+}
+
+// ReconcileProject replaces only one worktree's routes in the shared manifest.
+func (p *Proxy) ReconcileProject(ctx context.Context, projectID, worktreeID string, desired []Route) error {
+	_, _, err := p.paths()
+	if err != nil {
+		return err
+	}
+	routes, err := LoadRoutes(p.StateDir)
+	if err != nil {
+		return err
+	}
+	merged := mergeProjectRoutes(routes, projectID, worktreeID, desired)
+	return p.Reconcile(ctx, uniqueRoutes(merged))
+}
+
+func mergeProjectRoutes(routes []Route, projectID, worktreeID string, desired []Route) []Route {
+	merged := make([]Route, 0, len(routes)+len(desired))
+	for _, route := range routes {
+		if route.ProjectID != projectID || route.WorktreeID != worktreeID {
+			merged = append(merged, route)
+		}
+	}
+	return append(merged, desired...)
 }
 func (p *Proxy) EnsureNetwork(ctx context.Context) error {
 	if err := p.Runner.Run(ctx, []string{"network", "inspect", "laradev-proxy"}, nil, io.Discard, io.Discard); err == nil {
@@ -300,6 +348,21 @@ func LoadRoutes(stateDir string) ([]Route, error) {
 	var r []Route
 	return r, json.Unmarshal(b, &r)
 }
+
+func uniqueRoutes(routes []Route) []Route {
+	seen := map[string]bool{}
+	out := make([]Route, 0, len(routes))
+	for _, route := range routes {
+		key := route.ProjectID + "\x00" + route.WorktreeID + "\x00" + route.Domain
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		out = append(out, route)
+	}
+	return out
+}
+
 func (p *Proxy) AddDomain(c *config.Config, name string, port uint16) error {
 	name = strings.ToLower(strings.TrimSpace(name))
 	if err := config.ValidateHostname(name); err != nil {

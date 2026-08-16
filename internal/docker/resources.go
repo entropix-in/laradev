@@ -13,6 +13,8 @@ type Resource struct {
 	Name   string            `json:"Name"`
 	State  string            `json:"State"`
 	Status string            `json:"Status"`
+	Image  string            `json:"Image"`
+	Env    map[string]string `json:"Env"`
 	Labels map[string]string `json:"Labels"`
 	Ports  string            `json:"Ports"`
 }
@@ -44,7 +46,11 @@ func (r Resources) Inspect(ctx context.Context, name string) (Resource, error) {
 			Status  string
 			Running bool
 		}
-		Config          struct{ Labels map[string]string }
+		Config struct {
+			Image  string
+			Env    []string
+			Labels map[string]string
+		}
 		NetworkSettings struct {
 			Ports map[string][]struct{ HostIP, HostPort string }
 		}
@@ -52,7 +58,14 @@ func (r Resources) Inspect(ctx context.Context, name string) (Resource, error) {
 	if err := json.Unmarshal([]byte(strings.TrimSpace(out)), &raw); err != nil {
 		return Resource{}, err
 	}
-	return Resource{ID: raw.ID, Name: strings.TrimPrefix(raw.Name, "/"), State: raw.State.Status, Labels: raw.Config.Labels}, nil
+	env := map[string]string{}
+	for _, value := range raw.Config.Env {
+		parts := strings.SplitN(value, "=", 2)
+		if len(parts) == 2 {
+			env[parts[0]] = parts[1]
+		}
+	}
+	return Resource{ID: raw.ID, Name: strings.TrimPrefix(raw.Name, "/"), State: raw.State.Status, Image: raw.Config.Image, Env: env, Labels: raw.Config.Labels}, nil
 }
 func LabelsMatch(got map[string]string, expected map[string]string) bool {
 	for k, v := range expected {

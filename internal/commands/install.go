@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/entropix-in/laradev/internal/config"
 	"github.com/entropix-in/laradev/internal/project"
 )
 
@@ -43,6 +44,9 @@ func (m Manifest) valid() bool {
 		if seen[s] {
 			return false
 		}
+		if config.ValidateCommand(s) != nil {
+			return false
+		}
 		seen[s] = true
 	}
 	return true
@@ -69,6 +73,9 @@ func Install(ctx context.Context, binDir string, extra []string, cwd string, in 
 		}
 	}
 	for _, n := range extra {
+		if err := config.ValidateCommand(n); err != nil {
+			return err
+		}
 		names[n] = true
 	}
 	shims := make([]string, 0, len(names))
@@ -120,7 +127,14 @@ func Install(ctx context.Context, binDir string, extra []string, cwd string, in 
 		}
 	}
 	for _, n := range shims {
+		if err := config.ValidateCommand(n); err != nil {
+			return err
+		}
 		p := filepath.Join(binDir, n)
+		rel, err := filepath.Rel(binDir, p)
+		if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || filepath.Base(n) != n {
+			return fmt.Errorf("shim path escapes installation directory: %s", n)
+		}
 		if st, e := os.Lstat(p); e == nil {
 			if st.Mode()&os.ModeSymlink == 0 {
 				return fmt.Errorf("refusing unrelated existing %s", p)
