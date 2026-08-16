@@ -12,13 +12,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rohan2388/laradev/internal/config"
-	"github.com/rohan2388/laradev/internal/dns"
-	"github.com/rohan2388/laradev/internal/docker"
-	"github.com/rohan2388/laradev/internal/lock"
-	"github.com/rohan2388/laradev/internal/project"
-	"github.com/rohan2388/laradev/internal/proxy"
-	"github.com/rohan2388/laradev/internal/state"
+	"github.com/entropix-in/laradev/internal/config"
+	"github.com/entropix-in/laradev/internal/dns"
+	"github.com/entropix-in/laradev/internal/docker"
+	"github.com/entropix-in/laradev/internal/lock"
+	"github.com/entropix-in/laradev/internal/project"
+	"github.com/entropix-in/laradev/internal/proxy"
+	"github.com/entropix-in/laradev/internal/state"
 )
 
 type App struct {
@@ -54,7 +54,7 @@ func (a App) Run(args []string) error {
 	if lockErr != nil {
 		return lockErr
 	}
-	mutating := args[0] == "init" || args[0] == "new" || args[0] == "up" || args[0] == "stop" || args[0] == "down" || args[0] == "install" || args[0] == "stop-all" || args[0] == "cleanup" || args[0] == "command" || args[0] == "domain" || (args[0] == "dns" && (len(args) < 2 || args[1] != "status"))
+	mutating := args[0] == "init" || args[0] == "new" || args[0] == "up" || args[0] == "stop" || args[0] == "down" || args[0] == "install" || args[0] == "update" || args[0] == "stop-all" || args[0] == "cleanup" || args[0] == "command" || args[0] == "domain" || (args[0] == "dns" && (len(args) < 2 || args[1] != "status"))
 	if mutating || args[0] == "status" || (args[0] == "dns" && len(args) > 1 && args[1] == "status") {
 		exclusive := mutating
 		held, err := lock.Acquire(ctx, filepath.Join(lockPath, "laradev.lock"), exclusive, map[bool]time.Duration{true: 30 * time.Second, false: 5 * time.Second}[exclusive])
@@ -85,6 +85,18 @@ func (a App) Run(args []string) error {
 			}
 		}
 		return NewProject(ctx, args[1], version, r, a.In, a.Out, a.Err)
+	case "version":
+		return printVersion(a.Out)
+	case "update":
+		checkOnly := false
+		for _, arg := range args[1:] {
+			if arg == "--check" {
+				checkOnly = true
+				continue
+			}
+			return errors.New("usage: laradev update [--check]")
+		}
+		return Update(ctx, updateOptions{CheckOnly: checkOnly, Out: a.Out})
 	case "dns":
 		return a.dns(args[1:])
 	case "up", "stop", "down", "status":

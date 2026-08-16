@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/rohan2388/laradev/internal/config"
+	"github.com/entropix-in/laradev/internal/config"
 )
 
 type Context struct {

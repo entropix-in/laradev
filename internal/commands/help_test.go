@@ -21,6 +21,8 @@ func TestHelpDispatchDoesNotRequireProjectOrDocker(t *testing.T) {
 		{name: "command add", args: []string{"command", "add", "--help"}, want: "laradev command add <name>"},
 		{name: "new", args: []string{"new", "-h"}, want: "--laravel-version"},
 		{name: "install", args: []string{"install", "-h"}, want: "--bin-dir"},
+		{name: "version", args: []string{"version", "-h"}, want: "laradev version"},
+		{name: "update", args: []string{"update", "-h"}, want: "laradev update"},
 	}
 
 	for _, tt := range tests {

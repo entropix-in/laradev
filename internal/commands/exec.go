@@ -11,8 +11,8 @@ import (
 
 	"golang.org/x/term"
 
-	"github.com/rohan2388/laradev/internal/docker"
-	"github.com/rohan2388/laradev/internal/project"
+	"github.com/entropix-in/laradev/internal/docker"
+	"github.com/entropix-in/laradev/internal/project"
 )
 
 type ExecOptions struct {

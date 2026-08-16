@@ -41,6 +41,10 @@ func helpText(args []string) string {
 		return initHelp
 	case "new":
 		return newHelp
+	case "version":
+		return versionHelp
+	case "update":
+		return updateHelp
 	case "up":
 		return upHelp
 	case "stop":
@@ -83,6 +87,8 @@ USAGE
 PROJECT COMMANDS
   init [directory]                 Create .laradev.yml interactively.
   new <directory>                  Scaffold a Laravel project, then write config.
+  version                          Show the installed laradev version.
+  update [--check]                 Update laradev from the latest GitHub release.
   up                               Create or start the current project's services.
   stop                             Stop services without deleting containers or data.
   down                             Remove project containers; preserve MySQL data.
@@ -120,6 +126,22 @@ The config is written atomically with mode 0600. Existing configs are never over
 EXAMPLES
   laradev init
   laradev init ./my-project
+`
+
+const versionHelp = `USAGE
+  laradev version
+
+Show the embedded laradev version and target platform. This command does not
+require a project directory or Docker.
+`
+
+const updateHelp = `USAGE
+  laradev update
+  laradev update --check
+
+Download the latest stable Linux/amd64 GitHub release. The update is verified
+with the published SHA-256 checksum and replaces the installed binary atomically.
+Use --check to report availability without changing the installation.
 `
 
 const newHelp = `USAGE

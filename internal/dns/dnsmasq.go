@@ -12,10 +12,10 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/rohan2388/laradev/internal/config"
-	"github.com/rohan2388/laradev/internal/docker"
-	"github.com/rohan2388/laradev/internal/host"
-	"github.com/rohan2388/laradev/internal/state"
+	"github.com/entropix-in/laradev/internal/config"
+	"github.com/entropix-in/laradev/internal/docker"
+	"github.com/entropix-in/laradev/internal/host"
+	"github.com/entropix-in/laradev/internal/state"
 )
 
 const (

@@ -11,7 +11,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/rohan2388/laradev/internal/project"
+	"github.com/entropix-in/laradev/internal/project"
 )
 
 type Manifest struct {

@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rohan2388/laradev/internal/config"
-	"github.com/rohan2388/laradev/internal/project"
+	"github.com/entropix-in/laradev/internal/config"
+	"github.com/entropix-in/laradev/internal/project"
 )
 
 func TestPrintStartupGuideIncludesViteAndDatabaseSetup(t *testing.T) {

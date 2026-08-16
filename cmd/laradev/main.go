@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/rohan2388/laradev/internal/commands"
+	"github.com/entropix-in/laradev/internal/commands"
 )
 
 func main() {

@@ -12,12 +12,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rohan2388/laradev/internal/config"
-	"github.com/rohan2388/laradev/internal/dns"
-	"github.com/rohan2388/laradev/internal/docker"
-	"github.com/rohan2388/laradev/internal/host"
-	"github.com/rohan2388/laradev/internal/project"
-	"github.com/rohan2388/laradev/internal/proxy"
+	"github.com/entropix-in/laradev/internal/config"
+	"github.com/entropix-in/laradev/internal/dns"
+	"github.com/entropix-in/laradev/internal/docker"
+	"github.com/entropix-in/laradev/internal/host"
+	"github.com/entropix-in/laradev/internal/project"
+	"github.com/entropix-in/laradev/internal/proxy"
 )
 
 const managedLabel = "com.laradev.managed=true"

@@ -11,10 +11,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/rohan2388/laradev/internal/config"
-	"github.com/rohan2388/laradev/internal/lock"
-	"github.com/rohan2388/laradev/internal/project"
-	"github.com/rohan2388/laradev/internal/state"
+	"github.com/entropix-in/laradev/internal/config"
+	"github.com/entropix-in/laradev/internal/lock"
+	"github.com/entropix-in/laradev/internal/project"
+	"github.com/entropix-in/laradev/internal/state"
 )
 
 func LaravelConstraint(php string) string {

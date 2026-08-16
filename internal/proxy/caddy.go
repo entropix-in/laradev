@@ -18,9 +18,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rohan2388/laradev/internal/config"
-	"github.com/rohan2388/laradev/internal/docker"
-	"github.com/rohan2388/laradev/internal/state"
+	"github.com/entropix-in/laradev/internal/config"
+	"github.com/entropix-in/laradev/internal/docker"
+	"github.com/entropix-in/laradev/internal/state"
 )
 
 type Route struct {

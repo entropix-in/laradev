@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23.x'
+
+      - name: Check formatting
+        run: test -z "$(gofmt -l .)"
+
+      - name: Run tests
+        run: go test ./...
+
+      - name: Build Linux amd64 binary
+        env:
+          CGO_ENABLED: '0'
+          GOOS: linux
+          GOARCH: amd64
+        run: go build -trimpath -ldflags '-X github.com/entropix-in/laradev/internal/version.Value=ci' -o /tmp/laradev ./cmd/laradev
+
+      - name: Check installer syntax
+        run: bash -n install.sh
+
+      - name: Install ShellCheck
+        run: sudo apt-get update && sudo apt-get install --yes shellcheck
+
+      - name: Check installer with ShellCheck
+        run: shellcheck install.sh
+
+      - name: Smoke-test installer against a local release
+        run: |
+          set -eu
+          fixture="$(mktemp -d)"
+          install_dir="$(mktemp -d)"
+          mkdir -p "$fixture/latest/download"
+          cp /tmp/laradev "$fixture/laradev"
+          tar --create --gzip --file "$fixture/laradev-linux-amd64.tar.gz" --directory "$fixture" laradev
+          (cd "$fixture" && sha256sum laradev-linux-amd64.tar.gz > laradev-linux-amd64.tar.gz.sha256)
+          cp "$fixture/laradev-linux-amd64.tar.gz" "$fixture/latest/download/"
+          cp "$fixture/laradev-linux-amd64.tar.gz.sha256" "$fixture/latest/download/"
+          python3 -m http.server 18765 --bind 127.0.0.1 --directory "$fixture" >/tmp/laradev-installer.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true; rm -rf "$fixture" "$install_dir"' EXIT
+          sleep 1
+          BIN_DIR="$install_dir" RELEASE_BASE_URL=http://127.0.0.1:18765 sh ./install.sh
+          PATH="$install_dir:$PATH" "$install_dir/laradev" version
+          test -L "$install_dir/php"
+          test -f "$install_dir/.laradev-install.json"

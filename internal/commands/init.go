@@ -9,11 +9,11 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/rohan2388/laradev/internal/config"
-	"github.com/rohan2388/laradev/internal/dns"
-	"github.com/rohan2388/laradev/internal/project"
-	"github.com/rohan2388/laradev/internal/prompt"
-	"github.com/rohan2388/laradev/internal/proxy"
+	"github.com/entropix-in/laradev/internal/config"
+	"github.com/entropix-in/laradev/internal/dns"
+	"github.com/entropix-in/laradev/internal/project"
+	"github.com/entropix-in/laradev/internal/prompt"
+	"github.com/entropix-in/laradev/internal/proxy"
 )
 
 func BuildConfig(in io.Reader, out, errOut io.Writer) (config.Config, error) {

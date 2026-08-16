@@ -1,4 +1,4 @@
-module github.com/rohan2388/laradev
+module github.com/entropix-in/laradev
 
 go 1.23
 

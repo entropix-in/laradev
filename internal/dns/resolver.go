@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/rohan2388/laradev/internal/host"
+	"github.com/entropix-in/laradev/internal/host"
 )
 
 const (

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/rohan2388/laradev/internal/project"
+	"github.com/entropix-in/laradev/internal/project"
 )
 
 // PrintStartupGuide prints the container-side setup required after a successful up.

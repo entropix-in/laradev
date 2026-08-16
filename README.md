@@ -31,6 +31,7 @@ The project is designed for a host with Docker but does not require a host Go, P
   `sudo`.
 - Docker can pull `dockurr/dnsmasq:latest` for the managed DNS container.
 - `mkcert` is required only for HTTPS certificate generation.
+- `curl`, `tar`, and `sha256sum` or `shasum` are required for release installation.
 - `make` is required for the Dockerized build workflow.
 
 The default generated configuration publishes www ports `80:80` and `5173:5173`
@@ -47,7 +48,7 @@ make test
 make build
 ```
 
-The commands run Go inside `golang:1.23-alpine` with `CGO_ENABLED=0`, `GOOS=linux`, and `GOARCH=amd64`. Build output is written to `bin/laradev`.
+The commands run Go inside `golang:1.23-alpine` with `CGO_ENABLED=0`, `GOOS=linux`, and `GOARCH=amd64`. Build output is written to `bin/laradev`. Local builds report version `dev`; release builds inject their Git tag.
 
 Install the binary and default forwarding shims:
 
@@ -74,6 +75,51 @@ TMP_BIN="$(mktemp -d)"
 make dev BIN_DIR="$TMP_BIN"
 PATH="$TMP_BIN:$PATH" laradev -h
 ```
+
+### Install the latest release
+
+Install a verified Linux/amd64 release without installing Go:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/entropix-in/laradev/main/install.sh | sh
+export PATH="$HOME/.local/bin:$PATH"
+```
+
+Install a specific release by setting `VERSION`:
+
+```bash
+VERSION=v0.1.0 curl -fsSL https://raw.githubusercontent.com/entropix-in/laradev/main/install.sh | sh
+```
+
+The installer downloads the release archive and SHA-256 checksum over HTTPS,
+verifies the archive, installs `laradev` under `$HOME/.local/bin`, and creates
+the configured command shims. Set `BIN_DIR` to use another installation directory.
+
+### Check and update laradev
+
+```bash
+laradev version
+laradev update --check
+laradev update
+```
+
+`update` checks the latest stable GitHub release, verifies its checksum, and
+atomically replaces the current binary only when a newer release is available.
+It does not require a project directory or Docker.
+
+### Publish a release
+
+CI runs formatting, tests, a Linux/amd64 build, and installer checks on pushes
+to `main` and pull requests. Maintainers publish a release by pushing a SemVer
+tag or publishing a GitHub Release; GitHub Actions uploads the binary and checksum:
+
+```bash
+git tag -a v0.1.0 -m "Release v0.1.0"
+git push origin v0.1.0
+```
+
+Release assets are named `laradev-linux-amd64.tar.gz` and
+`laradev-linux-amd64.tar.gz.sha256`.
 
 ## Help
 
@@ -538,6 +584,9 @@ internal/proxy/           Caddy routes and certificates
 internal/state/           protected user state paths
 internal/lock/            cross-process locks
 internal/prompt/          interactive prompts
+internal/version/         linker-injected build version
+.github/workflows/        main CI and tagged release workflows
+install.sh                verified latest-release installer
 Makefile                  Dockerized format, test, build, and install workflow
 ```
 
